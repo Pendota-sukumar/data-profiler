@@ -112,9 +112,21 @@ if df is not None:
     for col in df_clean.select_dtypes(include='object').columns:
         df_clean[col] = LabelEncoder().fit_transform(df_clean[col])
 
-    st.subheader("📊 Correlation Heatmap")
-    fig = plt.figure()
-    sns.heatmap(df_clean.corr(), annot=True, cmap="coolwarm")
+    st.subheader("📊 Correlation (Filtered Heatmap)")
+    
+    # Limit to numeric cols
+    corr = df_clean.corr()
+
+    # Option to filter only strong correlations
+    threshold = st.slider("Correlation threshold (abs)", 0.0, 1.0, 0.5, 0.05)
+    filtered_corr = corr[(abs(corr) >= threshold) & (abs(corr) != 1.0)]
+
+    # Optional: mask upper triangle for clarity
+    mask = np.triu(np.ones_like(corr, dtype=bool))
+
+    fig, ax = plt.subplots(figsize=(10, 6))  # Adjust size here
+    sns.heatmap(corr, mask=mask, annot=True, cmap='coolwarm', fmt=".2f",
+                linewidths=.5, cbar_kws={"shrink": .8})
     st.pyplot(fig)
 
     st.subheader("📈 Visualizations (5 Types)")
@@ -125,31 +137,32 @@ if df is not None:
 
         with col1:
             col_hist = st.selectbox("📌 Histogram Column", num_cols)
-            fig1 = plt.figure()
+            fig1 = plt.figure(figsize=(8, 5))  # Smaller size
             sns.histplot(df_clean[col_hist], kde=True)
             st.pyplot(fig1)
 
         with col2:
             col_box = st.selectbox("📌 Boxplot Column", num_cols)
-            fig2 = plt.figure()
+            fig2 = plt.figure(figsize=(8, 5))  # Smaller size
             sns.boxplot(y=df_clean[col_box])
             st.pyplot(fig2)
 
         st.write("📌 Scatter Plot")
         x_axis = st.selectbox("X Axis", num_cols, key="x")
         y_axis = st.selectbox("Y Axis", num_cols, key="y")
-        fig3 = plt.figure()
+        fig3 = plt.figure(figsize=(8, 5))  # Smaller size
         sns.scatterplot(x=df_clean[x_axis], y=df_clean[y_axis])
         st.pyplot(fig3)
 
         st.write("📌 Violin Plot")
         col_vio = st.selectbox("📌 Violin Plot Column", num_cols, key="vio")
-        fig4 = plt.figure()
+        fig4 = plt.figure(figsize=(8, 5))  # Smaller size
         sns.violinplot(y=df_clean[col_vio])
         st.pyplot(fig4)
 
         st.write("📌 Pairplot (sampled)")
         fig5 = sns.pairplot(df_clean.sample(min(100, len(df_clean))))
+        fig5.fig.set_size_inches(8, 5)  # Smaller size
         st.pyplot(fig5)
 
     st.subheader("📋 EDA Suggestions")
@@ -194,13 +207,13 @@ if df is not None:
 
     if task == "classification":
         st.dataframe(pd.DataFrame(classification_report(y_test, y_pred, output_dict=True)).T)
-        fig6 = plt.figure()
+        fig6 = plt.figure(figsize=(8, 5))  # Smaller size
         sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt='d')
         st.pyplot(fig6)
     else:
         st.write("MSE:", mean_squared_error(y_test, y_pred))
         st.write("R² Score:", r2_score(y_test, y_pred))
-        fig7 = plt.figure()
+        fig7 = plt.figure(figsize=(8, 5))  # Smaller size
         plt.scatter(y_test, y_pred)
         plt.xlabel("Actual")
         plt.ylabel("Predicted")
