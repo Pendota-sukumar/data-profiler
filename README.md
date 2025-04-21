@@ -130,4 +130,4 @@ Feel free to open issues or contribute to the project! Pull requests are welcome
 ---
 
 ### **Author**
-[Your Name](https://github.com/Pendota-sukumar?tab=repositories) 
+[Pendota Sukumar](https://github.com/Pendota-sukumar?tab=repositories) 
