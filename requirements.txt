@@ -1,0 +1,12 @@
+streamlit
+pandas
+numpy
+matplotlib
+seaborn
+scikit-learn
+sqlalchemy
+pymysql
+psycopg2-binary
+boto3
+gcsfs
+google-cloud-bigquery
