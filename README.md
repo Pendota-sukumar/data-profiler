@@ -129,10 +129,5 @@ Feel free to open issues or contribute to the project! Pull requests are welcome
 
 ---
 
-### **Author**  
-[Your Name](  
-[Your Contact Info (Optional)]  
-
----
-
-Feel free to edit or customize it further for your specific needs!
+### **Author**
+[Your Name](https://github.com/Pendota-sukumar?tab=repositories) 
