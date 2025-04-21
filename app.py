@@ -1,166 +1,207 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import seaborn as sns
+import matplotlib.pyplot as plt
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.metrics import classification_report, confusion_matrix, mean_squared_error, r2_score
 
-# Configure Streamlit
-st.set_page_config(page_title="Auto EDA + ML", layout="wide")
-st.title("📊 Advanced Auto EDA & ML Dashboard")
+# Optional external connectors
+from sqlalchemy import create_engine
+from google.cloud import bigquery
+import boto3
+import io
 
-# Upload File
-uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
+# Streamlit setup
+st.set_page_config(page_title="Multi-Source EDA + AutoML", layout="wide")
+st.title("🔌 Connect Data | 📊 Auto EDA | 🤖 AutoML")
 
-if uploaded_file:
-    df = pd.read_csv(uploaded_file)
-    st.success("✅ File loaded successfully")
+# Step 1: Data source selection
+source = st.sidebar.selectbox("Choose Data Source", [
+    "Upload CSV",
+    "SQL Database",
+    "Google Drive CSV",
+    "AWS S3",
+    "Google BigQuery"
+])
 
-    # Show Data
-    st.subheader("📄 Data Preview")
+df = None
+
+# Step 2: Data connection logic
+if source == "Upload CSV":
+    file = st.file_uploader("Upload your CSV", type=["csv"])
+    if file:
+        df = pd.read_csv(file)
+        st.success("✅ CSV loaded")
+
+elif source == "SQL Database":
+    st.subheader("🔌 SQL Database Connector")
+    db_type = st.selectbox("Database Type", ["MySQL", "PostgreSQL"])
+    host = st.text_input("Host")
+    port = st.text_input("Port", "3306" if db_type == "MySQL" else "5432")
+    user = st.text_input("User")
+    password = st.text_input("Password", type="password")
+    database = st.text_input("Database Name")
+    sql_query = st.text_area("Enter SQL Query")
+
+    if st.button("Connect & Load"):
+        try:
+            db_url = f"{'mysql+pymysql' if db_type=='MySQL' else 'postgresql'}://{user}:{password}@{host}:{port}/{database}"
+            engine = create_engine(db_url)
+            df = pd.read_sql(sql_query, engine)
+            st.success("✅ Data loaded from SQL")
+        except Exception as e:
+            st.error(f"❌ Error: {e}")
+
+elif source == "Google Drive CSV":
+    st.subheader("📁 Google Drive Public File")
+    drive_link = st.text_input("Paste public Google Drive link")
+    if drive_link:
+        try:
+            file_id = drive_link.split('/d/')[1].split('/')[0]
+            download_url = f"https://drive.google.com/uc?id={file_id}"
+            df = pd.read_csv(download_url)
+            st.success("✅ Google Drive file loaded")
+        except Exception as e:
+            st.error(f"❌ Error: {e}")
+
+elif source == "AWS S3":
+    st.subheader("☁️ AWS S3 CSV Loader")
+    bucket = st.text_input("Bucket Name")
+    key = st.text_input("File Key (e.g. folder/data.csv)")
+    aws_access = st.text_input("AWS Access Key ID")
+    aws_secret = st.text_input("AWS Secret Key", type="password")
+    if st.button("Load from S3"):
+        try:
+            s3 = boto3.client('s3', aws_access_key_id=aws_access, aws_secret_access_key=aws_secret)
+            obj = s3.get_object(Bucket=bucket, Key=key)
+            df = pd.read_csv(io.BytesIO(obj['Body'].read()))
+            st.success("✅ Data loaded from AWS S3")
+        except Exception as e:
+            st.error(f"❌ Error: {e}")
+
+elif source == "Google BigQuery":
+    st.subheader("📡 Google BigQuery Connector")
+    gcp_project = st.text_input("Project ID")
+    bq_query = st.text_area("BigQuery SQL Query")
+    if st.button("Run Query"):
+        try:
+            client = bigquery.Client(project=gcp_project)
+            df = client.query(bq_query).to_dataframe()
+            st.success("✅ Data loaded from BigQuery")
+        except Exception as e:
+            st.error(f"❌ Error: {e}")
+
+# Step 3: If data is loaded
+if df is not None:
+    st.subheader("🔍 Data Preview")
     st.dataframe(df.head())
 
-    # Basic Info
-    st.subheader("📋 Dataset Summary")
-    st.write(f"Rows: `{df.shape[0]}` | Columns: `{df.shape[1]}`")
-    st.write("**Missing Values:**")
+    st.subheader("🧠 EDA Summary")
+    st.write("Shape:", df.shape)
+    st.write("Missing Values:")
     st.dataframe(df.isnull().sum())
 
-    # Data Types
-    st.write("**Data Types:**")
-    st.write(df.dtypes)
-
-    # Descriptive Stats
-    st.subheader("📊 Descriptive Statistics")
+    st.write("Descriptive Stats:")
     st.dataframe(df.describe(include='all'))
 
-    # Clean Data
     df_clean = df.dropna()
-    cat_cols = df_clean.select_dtypes(include='object').columns
-    for col in cat_cols:
+    for col in df_clean.select_dtypes(include='object').columns:
         df_clean[col] = LabelEncoder().fit_transform(df_clean[col])
 
-    # Correlation
-    st.subheader("🔗 Correlation Heatmap")
-    fig, ax = plt.subplots()
-    sns.heatmap(df_clean.corr(), annot=True, cmap='coolwarm')
+    st.subheader("📊 Correlation Heatmap")
+    fig = plt.figure()
+    sns.heatmap(df_clean.corr(), annot=True, cmap="coolwarm")
     st.pyplot(fig)
 
-    # EDA - 5 Types of Charts
-    st.subheader("📈 Exploratory Charts")
-
+    st.subheader("📈 Visualizations (5 Types)")
     num_cols = df_clean.select_dtypes(include=np.number).columns.tolist()
 
     if len(num_cols) >= 2:
         col1, col2 = st.columns(2)
 
         with col1:
-            st.write("1️⃣ **Histogram**")
-            col_hist = st.selectbox("Choose column for histogram", num_cols)
-            fig, ax = plt.subplots()
-            sns.histplot(df_clean[col_hist], kde=True, ax=ax)
-            st.pyplot(fig)
+            col_hist = st.selectbox("📌 Histogram Column", num_cols)
+            fig1 = plt.figure()
+            sns.histplot(df_clean[col_hist], kde=True)
+            st.pyplot(fig1)
 
         with col2:
-            st.write("2️⃣ **Boxplot**")
-            col_box = st.selectbox("Choose column for boxplot", num_cols)
-            fig, ax = plt.subplots()
-            sns.boxplot(y=df_clean[col_box], ax=ax)
-            st.pyplot(fig)
+            col_box = st.selectbox("📌 Boxplot Column", num_cols)
+            fig2 = plt.figure()
+            sns.boxplot(y=df_clean[col_box])
+            st.pyplot(fig2)
 
-        st.write("3️⃣ **Scatter Plot**")
-        x_col = st.selectbox("X axis", num_cols, key='scatter_x')
-        y_col = st.selectbox("Y axis", num_cols, key='scatter_y')
-        fig, ax = plt.subplots()
-        sns.scatterplot(x=df_clean[x_col], y=df_clean[y_col], ax=ax)
-        st.pyplot(fig)
+        st.write("📌 Scatter Plot")
+        x_axis = st.selectbox("X Axis", num_cols, key="x")
+        y_axis = st.selectbox("Y Axis", num_cols, key="y")
+        fig3 = plt.figure()
+        sns.scatterplot(x=df_clean[x_axis], y=df_clean[y_axis])
+        st.pyplot(fig3)
 
-        st.write("4️⃣ **Violin Plot**")
-        col_violin = st.selectbox("Choose column for violin plot", num_cols)
-        fig, ax = plt.subplots()
-        sns.violinplot(y=df_clean[col_violin], ax=ax)
-        st.pyplot(fig)
+        st.write("📌 Violin Plot")
+        col_vio = st.selectbox("📌 Violin Plot Column", num_cols, key="vio")
+        fig4 = plt.figure()
+        sns.violinplot(y=df_clean[col_vio])
+        st.pyplot(fig4)
 
-        st.write("5️⃣ **Pairplot**")
-        if len(num_cols) > 1:
-            st.info("Showing pairplot for a sample (max 100 rows)")
-            fig = sns.pairplot(df_clean.sample(min(100, len(df_clean))))
-            st.pyplot(fig)
+        st.write("📌 Pairplot (sampled)")
+        fig5 = sns.pairplot(df_clean.sample(min(100, len(df_clean))))
+        st.pyplot(fig5)
 
-    # Smart EDA Summary
-    st.subheader("🧠 Smart EDA Summary")
-    suggestions = []
+    st.subheader("📋 EDA Suggestions")
+    eda_notes = []
 
-    # Missing values
-    missing = df.isnull().sum()
-    if missing.sum() > 0:
-        suggestions.append("🔧 Data has missing values. Consider using mean/median imputation or dropping rows.")
+    if df.isnull().sum().sum() > 0:
+        eda_notes.append("🔧 Missing values found — consider imputation or dropping.")
 
-    # Low variance
-    low_var_cols = [col for col in df_clean.columns if df_clean[col].nunique() <= 1]
-    if low_var_cols:
-        suggestions.append(f"🧹 Columns with zero/low variance: {', '.join(low_var_cols)}. Consider removing them.")
+    low_var = [col for col in df_clean.columns if df_clean[col].nunique() <= 1]
+    if low_var:
+        eda_notes.append(f"🧹 Low variance in columns: {', '.join(low_var)} — may remove them.")
 
-    # Highly correlated features
-    corr_matrix = df_clean.corr().abs()
-    upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
-    highly_corr = [col for col in upper.columns if any(upper[col] > 0.9)]
-    if highly_corr:
-        suggestions.append(f"🧠 Highly correlated columns detected: {', '.join(highly_corr)}. May cause multicollinearity.")
+    corr = df_clean.corr().abs()
+    high_corr = [col for col in corr.columns if any(corr[col] > 0.9) and col != corr.columns[-1]]
+    if high_corr:
+        eda_notes.append(f"⚠️ High correlation detected in: {', '.join(high_corr)} — check for multicollinearity.")
 
-    # Class imbalance
     target = df_clean.columns[-1]
     if df_clean[target].nunique() <= 10:
-        class_counts = df_clean[target].value_counts()
-        imbalance_ratio = class_counts.max() / class_counts.min()
-        if imbalance_ratio > 3:
-            suggestions.append("⚖️ Class imbalance detected. Consider SMOTE, undersampling, or class weights.")
+        imbalance = df_clean[target].value_counts().max() / df_clean[target].value_counts().min()
+        if imbalance > 3:
+            eda_notes.append("⚖️ Class imbalance detected — consider SMOTE or resampling.")
 
-    if suggestions:
-        for s in suggestions:
-            st.warning(s)
+    if eda_notes:
+        for note in eda_notes:
+            st.warning(note)
     else:
-        st.success("✅ No major data issues detected!")
+        st.success("✅ Data looks balanced and well distributed!")
 
-    # AutoML
     st.subheader("🤖 AutoML Model Training")
-
     X = df_clean.iloc[:, :-1]
     y = df_clean.iloc[:, -1]
 
-    if y.nunique() <= 10:
-        model = RandomForestClassifier()
-        task = "Classification"
-    else:
-        model = RandomForestRegressor()
-        task = "Regression"
+    task = "classification" if y.nunique() <= 10 else "regression"
+    model = RandomForestClassifier() if task == "classification" else RandomForestRegressor()
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
-    st.write(f"Detected Task: **{task}**")
+    st.write(f"Detected task: **{task.upper()}**")
 
-    if task == "Classification":
-        st.write("Classification Report:")
+    if task == "classification":
         st.dataframe(pd.DataFrame(classification_report(y_test, y_pred, output_dict=True)).T)
-
-        cm = confusion_matrix(y_test, y_pred)
-        fig, ax = plt.subplots()
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-        st.pyplot(fig)
-
+        fig6 = plt.figure()
+        sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt='d')
+        st.pyplot(fig6)
     else:
         st.write("MSE:", mean_squared_error(y_test, y_pred))
         st.write("R² Score:", r2_score(y_test, y_pred))
-
-        fig, ax = plt.subplots()
-        ax.scatter(y_test, y_pred)
-        ax.set_xlabel("Actual")
-        ax.set_ylabel("Predicted")
-        ax.set_title("Actual vs Predicted")
-        st.pyplot(fig)
+        fig7 = plt.figure()
+        plt.scatter(y_test, y_pred)
+        plt.xlabel("Actual")
+        plt.ylabel("Predicted")
+        st.pyplot(fig7)
